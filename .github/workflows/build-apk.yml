@@ -1,0 +1,55 @@
+name: Build Cleaning Gallery APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip uploaded project ZIP if present
+        shell: bash
+        run: |
+          set -e
+          ZIP="$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1 || true)"
+          if [ -n "$ZIP" ]; then
+            echo "Found $ZIP"
+            TMP="$(mktemp -d)"
+            unzip -q -o "$ZIP" -d "$TMP"
+            shopt -s dotglob nullglob
+            entries=("$TMP"/*)
+            if [ "${#entries[@]}" -eq 1 ] && [ -d "${entries[0]}" ]; then
+              cp -R "${entries[0]}"/* .
+            else
+              cp -R "$TMP"/* .
+            fi
+            rm -rf "$TMP"
+          else
+            echo "No ZIP in repository root; building checked-in project."
+          fi
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build debug APK
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cleaning-gallery-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
